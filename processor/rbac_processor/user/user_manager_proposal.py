@@ -122,7 +122,7 @@ def _validate_unique_proposal(header, user_proposal, state):
 
 def _validate_manager_is_signer(header, user_container, user_id):
     user = get_user_from_container(user_container, user_id)
-    if not user.manager_id == header.signer_public_key:
+    if not user.manager_id == header.signer_public_key and not user.manager_id == "":
         raise InvalidTransaction(
             "Update user for {} was signed by {} not "
             "the manager, {}.".format(
@@ -160,7 +160,6 @@ def handle_state_set(proposal_state_entries,
         proposal_address: proposal_container.SerializeToString()
     })
 
-
 def apply_user_confirm(header, payload, state):
     confirm_payload = user_transaction_pb2.ConfirmUpdateUserManager()
     confirm_payload.ParseFromString(payload.content)
@@ -176,8 +175,8 @@ def apply_user_confirm(header, payload, state):
             proposal_address=proposal_address,
             proposal_id=confirm_payload.proposal_id):
         raise InvalidTransaction(
-            "Proposal id {} does not exist or is not open.".format(
-                confirm_payload.proposal_id))
+            "Proposal id {} for user {} to update manager to {} does not exist or is not open.".format(
+                confirm_payload.proposal_id, confirm_payload.user_id, confirm_payload.manager_id))
 
     entry = get_state_entry(proposal_entries, proposal_address)
     proposal_container = return_prop_container(entry)

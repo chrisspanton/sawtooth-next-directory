@@ -14,6 +14,7 @@
 # -----------------------------------------------------------------------------
 
 from base64 import b64decode
+import sys
 import logging
 import time
 import unittest
@@ -37,6 +38,8 @@ from rbac_transaction_creation import task_transaction_creation
 
 
 LOGGER = logging.getLogger(__name__)
+LOGGER.level = logging.DEBUG
+LOGGER.addHandler(logging.StreamHandler(sys.stdout))
 
 BATCHER_PRIVATE_KEY = Secp256k1PrivateKey.new_random().as_hex()
 BATCHER_KEY = Key(BATCHER_PRIVATE_KEY)
@@ -108,6 +111,7 @@ class TestBlockchain(unittest.TestCase):
 
         cls.role_id1 = str(uuid4())
         cls.task_id1 = str(uuid4())
+        cls.task_id2 = str(uuid4())
         cls.update_manager_proposal_id = str(uuid4())
         cls.add_role_admins_proposal_id = str(uuid4())
         cls.add_role_owners_proposal_id = str(uuid4())
@@ -148,6 +152,7 @@ class TestBlockchain(unittest.TestCase):
         self.assertEqual(
             self.client.create_user(
                 key=self.key1,
+                name=self.user1,
                 user_name=self.user1,
                 user_id=self.key1.public_key)[0]['status'],
             'COMMITTED')
@@ -155,6 +160,7 @@ class TestBlockchain(unittest.TestCase):
         self.assertEqual(
             self.client.create_user(
                 key=self.key1,
+                name=self.user2a,
                 user_name=self.user2a,
                 user_id=self.key2a.public_key,
                 manager_id=self.key1.public_key)[0]['status'],
@@ -163,6 +169,7 @@ class TestBlockchain(unittest.TestCase):
         self.assertEqual(
             self.client.create_user(
                 key=self.key3a,
+                name=self.user2b,
                 user_name=self.user2b,
                 user_id=self.key2b.public_key,
                 manager_id=self.key3a.public_key)[0]['status'],
@@ -173,6 +180,7 @@ class TestBlockchain(unittest.TestCase):
         self.assertEqual(
             self.client.create_user(
                 key=self.key2a,
+                name=self.user1,
                 user_name=self.user1,
                 user_id=self.key2a.public_key,
                 manager_id=self.key1.public_key)[0]['status'],
@@ -182,6 +190,7 @@ class TestBlockchain(unittest.TestCase):
         self.assertEqual(
             self.client.create_user(
                 key=self.key2a,
+                name=self.user2b,
                 user_name=self.user2b,
                 user_id=self.key2b.public_key,
                 manager_id=self.key1.public_key)[0]['status'],
@@ -191,6 +200,7 @@ class TestBlockchain(unittest.TestCase):
         self.assertEqual(
             self.client.create_user(
                 key=self.key_invalid,
+                name=self.user_invalid[:4],
                 user_name=self.user_invalid[:4],
                 user_id=self.key_invalid.public_key,
                 manager_id=None)[0]['status'],
@@ -200,6 +210,7 @@ class TestBlockchain(unittest.TestCase):
         self.assertEqual(
             self.client.create_user(
                 key=self.key2a,
+                name=self.user3a,
                 user_name=self.user3a,
                 user_id=self.key3a.public_key,
                 manager_id=self.key2a.public_key)[0]['status'],
@@ -208,6 +219,7 @@ class TestBlockchain(unittest.TestCase):
         self.assertEqual(
             self.client.create_user(
                 key=self.key1,
+                name=self.user2b,
                 user_name=self.user2b,
                 user_id=self.key2b.public_key,
                 manager_id=self.key1.public_key)[0]['status'],
@@ -216,6 +228,7 @@ class TestBlockchain(unittest.TestCase):
         self.assertEqual(
             self.client.create_user(
                 key=self.key3b,
+                name=self.user3b,
                 user_name=self.user3b,
                 user_id=self.key3b.public_key,
                 manager_id=self.key2b.public_key)[0]['status'],
@@ -1276,9 +1289,9 @@ class TestBlockchain(unittest.TestCase):
             ProposeAddTaskAdmins validation rules.
                 - The Task exists
                 - The User exists
-                - The txn signer is the User or the User's manager.
+                - The txn signer is the User, the User's manager, or the Task Admin/Owner.
                 - No open proposal exists for the same change.
-                - The user is not already an Admin of the Task.
+                - The User is not already an Admin of the Task.
         """
 
         self.assertEqual(
@@ -1301,18 +1314,18 @@ class TestBlockchain(unittest.TestCase):
                 reason=uuid4().hex,
                 metadata=uuid4().hex)[0]['status'],
             "INVALID",
-            "The user must exist")
+            "The User must exist")
 
         self.assertEqual(
             self.client.propose_add_task_admins(
                 key=self.key1,
                 proposal_id=str(uuid4()),
-                task_id=self.task_id1,
+                task_id=self.task_id2,
                 user_id=self.key3a.public_key,
                 reason=uuid4().hex,
                 metadata=uuid4().hex)[0]['status'],
             "INVALID",
-            "The txn signer must be the user or user's manager")
+            "The txn signer must be the User,  User's manager, or the Task Admin/Owner.")
 
         self.assertEqual(
             self.client.propose_add_task_admins(
@@ -1323,6 +1336,17 @@ class TestBlockchain(unittest.TestCase):
                 reason=uuid4().hex,
                 metadata=uuid4().hex)[0]['status'],
             "COMMITTED")
+        
+        self.assertEqual(
+            self.client.propose_add_task_admins(
+                key=self.key1,
+                proposal_id=str(uuid4()),
+                task_id=self.task_id1,
+                user_id=self.key1.public_key,
+                reason=uuid4().hex,
+                metadata=uuid4().hex)[0]['status'],
+            "INVALID",
+            "The User must not already be an Admin of the Task")
 
         self.assertEqual(
             self.client.propose_add_task_admins(
@@ -1333,7 +1357,7 @@ class TestBlockchain(unittest.TestCase):
                 reason=uuid4().hex,
                 metadata=uuid4().hex)[0]['status'],
             "INVALID",
-            "The must not be any open proposal for the same change.")
+            "There must not be any OPEN proposal for the same change.")
 
     def test_19_confirm_add_task_admins(self):
         """Tests the ConfirmAddTaskAdmins validation rules
@@ -1430,10 +1454,10 @@ class TestBlockchain(unittest.TestCase):
             ProposeAddTaskOwners
                 - The Task exists
                 - The User exists
+                - The txn signer is the User, the User's manager, or the Task Admin/Owner.
                 - No open proposal exists for the same change.
-                - The txn signer is the user or the Users manager.
                 - The User is not already an Owner of the Task.
-        """
+       """
 
         self.assertEqual(
             self.client.propose_add_task_owners(
@@ -1459,25 +1483,14 @@ class TestBlockchain(unittest.TestCase):
 
         self.assertEqual(
             self.client.propose_add_task_owners(
-                key=self.key2a,
-                proposal_id=str(uuid4()),
-                task_id=self.task_id1,
-                user_id=self.key2a.public_key,
-                reason=uuid4().hex,
-                metadata=uuid4().hex)[0]['status'],
-            "INVALID",
-            "The User must not already be an Owner of the Task")
-
-        self.assertEqual(
-            self.client.propose_add_task_owners(
                 key=self.key3a,
                 proposal_id=str(uuid4()),
-                task_id=self.task_id1,
+                task_id=self.task_id2,
                 user_id=self.key2b.public_key,
                 reason=uuid4().hex,
                 metadata=uuid4().hex)[0]['status'],
             "INVALID",
-            "The txn signer must be the User or the Users manager.")
+            "The txn signer must be the User,  User's manager, or the Task Admin/Owner.")
 
         self.assertEqual(
             self.client.propose_add_task_owners(
@@ -1488,6 +1501,18 @@ class TestBlockchain(unittest.TestCase):
                 reason=uuid4().hex,
                 metadata=uuid4().hex)[0]['status'],
             "COMMITTED")
+
+        self.assertEqual(
+            self.client.propose_add_task_owners(
+                key=self.key2a,
+                proposal_id=str(uuid4()),
+                task_id=self.task_id1,
+                user_id=self.key2a.public_key,
+                reason=uuid4().hex,
+                metadata=uuid4().hex)[0]['status'],
+            "INVALID",
+            "The User must not already be an Owner of the Task")
+
 
         self.assertEqual(
             self.client.propose_add_task_owners(
@@ -1506,11 +1531,11 @@ class TestBlockchain(unittest.TestCase):
         Notes
             ConfirmAddTaskOwners validation rules
                 - The proposal exists and is open.
-                - The txn signer is a Task Admin.
+                - The txn signer is a Task Owner.
         """
 
         self.assertEqual(
-            self.client.confirm_add_task_admins(
+            self.client.confirm_add_task_owners(
                 key=self.key1,
                 proposal_id=str(uuid4()),
                 task_id=self.task_id1,
@@ -1597,7 +1622,7 @@ class TestBlockchain(unittest.TestCase):
                 - The user is an admin of the task.
                 - The Task exists
                 - The User exists.
-                - The txn signer is the user or the user's manager.
+                - The txn signer is the User, the User's manager, or the Task Admin/Owner.
         """
 
         self.assertEqual(
@@ -1637,12 +1662,12 @@ class TestBlockchain(unittest.TestCase):
             self.client.propose_delete_task_admins(
                 key=self.key2b,
                 proposal_id=str(uuid4()),
-                task_id=self.task_id1,
+                task_id=self.task_id2,
                 user_id=self.key1.public_key,
                 reason=uuid4().hex,
                 metadata=uuid4().hex)[0]['status'],
             "INVALID",
-            "The txn signer must be the User or the User's Manager.")
+            "The txn signer must be the User, User's manager, or the Task Admin/Owner.")
 
         self.assertEqual(
             self.client.propose_delete_task_admins(
@@ -1663,7 +1688,7 @@ class TestBlockchain(unittest.TestCase):
                 - The user is an Owner of the task.
                 - The Task exists.
                 - The User exists.
-                - The txn signer is the user or the user's manager.
+                - The txn signer is the User, the User's manager, or the Task Admin/Owner.
         """
 
         self.assertEqual(
@@ -1703,12 +1728,12 @@ class TestBlockchain(unittest.TestCase):
             self.client.propose_delete_task_owners(
                 key=self.key2b,
                 proposal_id=str(uuid4()),
-                task_id=self.task_id1,
+                task_id=self.task_id2,
                 user_id=self.key1.public_key,
                 reason=uuid4().hex,
                 metadata=uuid4().hex)[0]['status'],
             "INVALID",
-            "The txn signer must be the User or the User's Manager.")
+            "The txn signer must be the User, User's manager, or the Task Admin/Owner.")
 
         self.assertEqual(
             self.client.propose_delete_task_owners(
@@ -1735,13 +1760,14 @@ class RBACClient(object):
                 items.append((user_container, addresser.AddressSpace.USER))
         return items
 
-    def create_user(self, key, user_name, user_id, manager_id=None):
-        batch_list, signature = create_user(key,
-                                            BATCHER_KEY,
-                                            user_name,
-                                            user_id,
-                                            uuid4().hex,
-                                            manager_id)
+    def create_user(self, key, name, user_name, user_id, manager_id=None):
+        batch_list, signature = create_user(txn_key=key,
+                                            batch_key=BATCHER_KEY,
+                                            name=name,
+                                            user_name=user_name,
+                                            user_id=user_id,
+                                            metadata=uuid4().hex,
+                                            manager_id=manager_id)
         self._client.send_batches(batch_list)
         return self._client.get_statuses([signature], wait=10)
 

@@ -198,9 +198,9 @@ async def update_proposal(request, proposal_id):
                 txn_key,
                 request.app.config.BATCHER_KEY_PAIR,
                 proposal_id,
+                request.json.get('reason'),
                 proposal_resource.get('object'),
-                proposal_resource.get('target'),
-                request.json.get('reason'))
+                proposal_resource.get('target'))
 
     await utils.send(
         request.app.config.VAL_CONN,
@@ -225,6 +225,9 @@ async def compile_proposal_resource(conn, proposal_resource, head_block_num):
             proposal_resource.get('object'),
             head_block_num
         ).run(conn)
+    elif 'users' in table:
+        # approvers needs to be new manager in update manager scenario
+        proposal_resource['approvers'] = [proposal_resource.get('target')]
     else:
         user_resource = await fetch_user_resource(
             conn,

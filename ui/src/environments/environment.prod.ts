@@ -24,10 +24,43 @@ export const environment = {
 
     //ROLES API
     roles: base + '/roles',
-    add_member: (roleId, member) => {
+    add_member: (roleId, member, reason) => {
+        return {
+            body: {
+                id: member.id,
+                reason: reason
+            },
+            url: base + '/roles/' + roleId + '/members'
+        }
+    },
+    add_owner: (roleId, member) => {
         return {
             body: {
                 id: member.id
+            },
+            url: base + '/roles/' + roleId + '/owners'
+        }
+    },
+    add_admin: (roleId, member) => {
+        return {
+            body: {
+                id: member.id
+            },
+            url: base + '/roles/' + roleId + '/admins'
+        }
+    },
+    promote_member_to_role_owner: (roleId, memberId) => {
+        return {
+            body: {
+                id: memberId
+            },
+            url: base + '/roles/' + roleId + '/owners'
+        }
+    },
+    remove_member: (roleId, memberId) => {
+        return {
+            body: {
+                id: memberId
             },
             url: base + '/roles/' + roleId + '/members'
         }
@@ -61,6 +94,14 @@ export const environment = {
                 email: email,
                 manager: manager,
                 metadata: metadata
+            }
+        }
+    },
+    update_manager: (userId, managerId) => {
+        return {
+            url: base + '/users/' + userId + '/manager',
+            body: {
+                id: managerId
             }
         }
     },
